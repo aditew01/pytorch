@@ -83,13 +83,21 @@ class Vectorized<float> {
   }
   template <typename step_t>
   static Vectorized<float> arange(
-      float base = 0.f,
-      step_t step = static_cast<step_t>(1)) {
-    __at_align__ float buffer[size()];
-    for (int64_t i = 0; i < size(); i++) {
-      buffer[i] = base + i * step;
+    if constexpr (std::is_same_v<step_t, double>) {
+      auto inc_even = svcvt_f64_u64_x(ptrue, svindex_u64(0, 2));
+      auto inc_odd = svadd_n_f64_x(ptrue, inc_even, 1.0);
+      auto base_vec = svdup_n_f64(base);
+      auto res_even = svcvt_f32_f64_x(ptrue, svmla_n_f64_x(ptrue, base_vec, inc_even, step));
+      auto res_odd = svcvt_f32_f64_x(ptrue, svmla_n_f64_x(ptrue, base_vec, inc_odd, step));
+      return svtrn1_f32(res_even, res_odd);
     }
-    return svld1_f32(ptrue, buffer);
+    else {
+      __at_align__ float buffer[size()];
+      for (int64_t i = 0; i < size(); i++) {
+        buffer[i] = base + i * step;
+      }
+      return svld1_f32(ptrue, buffer);
+     }
   }
   static Vectorized<float> set(
       const Vectorized<float>& a,
